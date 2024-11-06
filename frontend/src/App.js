@@ -1,4 +1,5 @@
 import './App.css';
+import AudioRecorder from './components/AudioRecorder';
 import Recorder from './components/Recorder';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { CssBaseline, AppBar, Toolbar, Typography, Container } from '@mui/material';

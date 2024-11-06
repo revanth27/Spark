@@ -10,27 +10,59 @@ function App() {
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
   const [audio] = useState(new Audio());
+  const audioRef = useRef();
+  
+  var hark = require('../../node_modules/hark/hark.bundle.js')
+  
+  function onMediaSuccess(blog) {
+    console.log('what?');
+    var options = {};
+    var speechEvents = hark(blog, options);
+
+    speechEvents.on('speaking', function() {
+      console.log('speaking');
+      if (!recording) {
+	setRecording(true);
+	recorderRef.current.reset();
+	recorderRef.current.startRecording();
+      }
+    });
+
+    speechEvents.on('stopped_speaking', async function() {
+      console.log('stopped_speaking');
+      await handleStop();
+      await handleSave();
+    });
+  };
 
   const handleRecording = async () => {
+    console.log('entered handleRecording');
     const mediaStream = await navigator.mediaDevices.getUserMedia({
       video: false,
       audio: true,
     });
-
+   
     setStream(mediaStream);
+    onMediaSuccess(mediaStream);
     recorderRef.current = new RecordRTC(mediaStream, { 
       type: "audio", 
       mimeType: "audio/wav",
       recorderType: RecordRTC.StereoAudioRecorder
     });
-    setRecording(!recording);
-    recorderRef.current.startRecording();
+    // setRecording(true);
+    // recorderRef.current.startRecording();
   };
 
   const handleStop = () => {
-    recorderRef.current.stopRecording(() => {
-      setRecording(!recording);
-      setBlob(recorderRef.current.getBlob());
+      recorderRef.current.stopRecording(() => {
+      setRecording(false);
+      let b = recorderRef.current.getBlob();
+      setBlob(b);
+      if (audioRef.current) {
+	audioRef.current.pause();
+	audioRef.current.load();
+	audioRef.current.play();
+      }
     });
   };
   
@@ -56,15 +88,18 @@ function App() {
   };
 
   const handleSave = () => {
-    // invokeSaveAsDialog(blob);
     const audioFile = new File([blob], 'voice.wav', { type: 'audio/wav' });
     const formData = new FormData();
     setLoading(!loading);
     formData.append('file', audioFile);
-    const data = [{"name": "ASR", "model_params": "{\"device\": \"cuda\", \"model\": \"openai/whisper-tiny\"}"}, {"name": "LLM", "model_params": "{\"device\": \"cuda\", \"model\": \"openai-gpt\"}"}, {"name": "TTS", "model_params": "{\"device\": \"cuda\", \"model\": \"microsoft/speecht5_tts\"}"}];
+    const data = [{"name": "ASR", "model_params": "{\"device\": \"cuda\", \"model\": \"openai/whisper-tiny\"}"}, {"name": "LLM", "model_params": "{\"device\": \"cuda\", \"model\": \"open-gpt\"}"}, {"name": "TTS", "model_params": "{\"device\": \"cuda\", \"model\": \"microsoft/speecht5_tts\"}"}];
     formData.append('data', JSON.stringify(data));
     onSaveAudio(formData);
   };
+
+  useEffect(() => {
+    handleRecording();
+  }, []);
 
   return (
     <Container maxWidth="sm" sx={{ mt: 5, textAlign: 'center' }}>
@@ -104,11 +139,20 @@ function App() {
             </Button>
           )}
 	  </Box>	  
-
+	  
 
           {/* Display loading spinner while sending data */}
           {loading && <CircularProgress sx={{ mt: 2 }} />}
 	  
+	  {blob && (
+	    <div>
+	      <audio id="audio-player" controls ref={audioRef}>
+		<source src={URL.createObjectURL(blob)} type={blob.type} />
+		  Your browser does not support the audio element.
+	      </audio>
+	    </div>
+	  )}
+
           {/* Server response */}
           {/*refResponse.current && (
             <Typography variant="body1" color="textSecondary" sx={{ mt: 3 }}>

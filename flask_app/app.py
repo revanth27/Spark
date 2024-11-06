@@ -86,6 +86,7 @@ def predict():
             else:
                 data = response.content
             headers['Content-type'] = response.headers['Content-Type']
+            clear_cache()
         except Exception as e:
             print("Exception occured while executing ", model['name'], ": ", e)
             clear_cache()

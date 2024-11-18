@@ -12,6 +12,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [audio] = useState(new Audio());
   const audioRef = useRef();
+  const loadingRef = useRef(loading);
   
   var hark = require('../../node_modules/hark/hark.bundle.js')
   
@@ -21,8 +22,8 @@ function App() {
     var speechEvents = hark(blog, options);
 
     speechEvents.on('speaking', function() {
-      console.log('speaking');
-      if (!recording) {
+      console.log('speaking', recording, loadingRef.current);
+      if (!recording && !loadingRef.current) {
 	setRecording(true);
 	if (recorderRef.current)
 	  recorderRef.current.reset();
@@ -32,7 +33,9 @@ function App() {
 
     speechEvents.on('stopped_speaking', async function() {
       console.log('stopped_speaking');
-      await handleStop();
+      if (!recording && !loadingRef.current) {
+	await handleStop();
+      }
       // await handleSave();
     });
   };
@@ -71,15 +74,12 @@ function App() {
   
   const onSaveAudio = async (formData) => {
     try {
-      const res = await axios.post('http://localhost:5000/', formData, {
-	// method: 'POST',
-	headers: {
-	  'Content-Type': 'multipart/form-data'
-	},
-	responseType: 'blob'
+      const res = await fetch('http://localhost:5000/', {
+	method: 'POST',
+	body: formData
       });
       setLoading(false);
-      console.log(res);
+      console.log(loading);
       
       const audioBlob = await res.blob();
       console.log(audioBlob);
@@ -94,11 +94,12 @@ function App() {
     }
   };
 
-  const handleSave = (b) => {
+  const handleSave =(b) => {
     console.log('blob: ', b);
     const audioFile = new File([b], 'voice.mp3', { type: 'audio/mp3' });
     const formData = new FormData();
-    setLoading(!loading);
+    setLoading(true);
+    console.log("!!", loading);
     formData.append('file', audioFile);
     const data = [{"name": "ASR", "model_params": "{\"device\": \"cuda\", \"model\": \"openai/whisper-tiny\"}"}, {"name": "LLM", "model_params": "{\"device\": \"cuda\", \"model\": \"openai-gpt\"}"}, {"name": "TTS", "model_params": "{\"device\": \"cuda\", \"model\": \"microsoft/speecht5_tts\"}"}];
     // const data = {"device": "cuda", "model": "openai/whisper-tiny"}
@@ -109,6 +110,11 @@ function App() {
   useEffect(() => {
     handleRecording();
   }, []);
+
+  useEffect(() => {
+    console.log('Loading status updated:', loading);
+    loadingRef.current = loading;
+  }, [loading]);
 
   return (
     <Container maxWidth="sm" sx={{ mt: 5, textAlign: 'center' }}>

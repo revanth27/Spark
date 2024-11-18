@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import axios from "axios";
 import "../App.css";
 import RecordRTC, { invokeSaveAsDialog } from "recordrtc";
 import { Button, CircularProgress, Container, Typography, Box, Card, CardContent } from "@mui/material";
@@ -23,7 +24,8 @@ function App() {
       console.log('speaking');
       if (!recording) {
 	setRecording(true);
-	recorderRef.current.reset();
+	if (recorderRef.current)
+	  recorderRef.current.reset();
 	recorderRef.current.startRecording();
       }
     });
@@ -31,7 +33,7 @@ function App() {
     speechEvents.on('stopped_speaking', async function() {
       console.log('stopped_speaking');
       await handleStop();
-      await handleSave();
+      // await handleSave();
     });
   };
 
@@ -46,7 +48,7 @@ function App() {
     onMediaSuccess(mediaStream);
     recorderRef.current = new RecordRTC(mediaStream, { 
       type: "audio", 
-      mimeType: "audio/wav",
+      mimeType: "audio/mp3",
       recorderType: RecordRTC.StereoAudioRecorder
     });
     // setRecording(true);
@@ -54,23 +56,27 @@ function App() {
   };
 
   const handleStop = () => {
-      recorderRef.current.stopRecording(() => {
+      recorderRef.current.stopRecording(async () => {
       setRecording(false);
-      let b = recorderRef.current.getBlob();
+      let b = await recorderRef.current.getBlob();
       setBlob(b);
       if (audioRef.current) {
 	audioRef.current.pause();
 	audioRef.current.load();
 	audioRef.current.play();
       }
+      handleSave(b);
     });
   };
   
   const onSaveAudio = async (formData) => {
     try {
-      const res = await fetch('http://localhost:5000/', {
-	method: 'POST',
-	body: formData
+      const res = await axios.post('http://localhost:5000/', formData, {
+	// method: 'POST',
+	headers: {
+	  'Content-Type': 'multipart/form-data'
+	},
+	responseType: 'blob'
       });
       setLoading(false);
       console.log(res);
@@ -81,18 +87,21 @@ function App() {
       
       audio.src = audioUrl;
       audio.play();
+
     } catch (err) {
       setLoading(false);
       console.log("error fetching audio", err);
     }
   };
 
-  const handleSave = () => {
-    const audioFile = new File([blob], 'voice.wav', { type: 'audio/wav' });
+  const handleSave = (b) => {
+    console.log('blob: ', b);
+    const audioFile = new File([b], 'voice.mp3', { type: 'audio/mp3' });
     const formData = new FormData();
     setLoading(!loading);
     formData.append('file', audioFile);
-    const data = [{"name": "ASR", "model_params": "{\"device\": \"cuda\", \"model\": \"openai/whisper-tiny\"}"}, {"name": "LLM", "model_params": "{\"device\": \"cuda\", \"model\": \"open-gpt\"}"}, {"name": "TTS", "model_params": "{\"device\": \"cuda\", \"model\": \"microsoft/speecht5_tts\"}"}];
+    const data = [{"name": "ASR", "model_params": "{\"device\": \"cuda\", \"model\": \"openai/whisper-tiny\"}"}, {"name": "LLM", "model_params": "{\"device\": \"cuda\", \"model\": \"openai-gpt\"}"}, {"name": "TTS", "model_params": "{\"device\": \"cuda\", \"model\": \"microsoft/speecht5_tts\"}"}];
+    // const data = {"device": "cuda", "model": "openai/whisper-tiny"}
     formData.append('data', JSON.stringify(data));
     onSaveAudio(formData);
   };

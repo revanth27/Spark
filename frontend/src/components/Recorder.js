@@ -13,6 +13,7 @@ function App() {
   const [audio] = useState(new Audio());
   const audioRef = useRef();
   const loadingRef = useRef(loading);
+  const [triggered, setTriggered] = useState(false);
   
   var hark = require('../../node_modules/hark/hark.bundle.js')
   
@@ -48,14 +49,17 @@ function App() {
     });
    
     setStream(mediaStream);
-    onMediaSuccess(mediaStream);
     recorderRef.current = new RecordRTC(mediaStream, { 
       type: "audio", 
       mimeType: "audio/mp3",
       recorderType: RecordRTC.StereoAudioRecorder
     });
-    // setRecording(true);
-    // recorderRef.current.startRecording();
+    if (!triggered) {
+      setRecording(true);
+      recorderRef.current.startRecording();
+    } else {
+      onMediaSuccess(mediaStream);
+    }
   };
 
   const handleStop = () => {
@@ -72,6 +76,23 @@ function App() {
     });
   };
   
+  const performASR = async (formData) => {
+    try {
+      const res = await fetch('http://localhost:5000/ASR', {
+	method: 'POST',
+	body: formData
+      });
+      const text = res.json()['text']
+      console(res, res.json(), res.json['text'])
+      const regex = RegExp(`\\bspark\\b`, 'i');
+      return regex.test(text);
+    } catch (err) {
+      setLoading(false);
+      console.log("error performing ASR: ", err);
+      return false;
+    }
+  };
+
   const onSaveAudio = async (formData) => {
     try {
       const res = await fetch('http://localhost:5000/', {
@@ -94,27 +115,42 @@ function App() {
     }
   };
 
-  const handleSave =(b) => {
+  const handleSave = async (b) => {
     console.log('blob: ', b);
     const audioFile = new File([b], 'voice.mp3', { type: 'audio/mp3' });
     const formData = new FormData();
     setLoading(true);
-    console.log("!!", loading);
     formData.append('file', audioFile);
+    if (!triggered) {
+      const data = {"device": "cuda", "model": "openai/whisper-tiny"}
+      formData.append('model_params', JSON.stringify(data));
+      if (await performASR(formData)) {
+	console.log('Triggered!!!!')
+	setTriggered(true);
+	setLoading(false);
+	return;
+      }
+    }
+    console.log('Normal recording');
     const data = [{"name": "ASR", "model_params": "{\"device\": \"cuda\", \"model\": \"openai/whisper-tiny\"}"}, {"name": "LLM", "model_params": "{\"device\": \"cuda\", \"model\": \"openai-gpt\"}"}, {"name": "TTS", "model_params": "{\"device\": \"cuda\", \"model\": \"microsoft/speecht5_tts\"}"}];
-    // const data = {"device": "cuda", "model": "openai/whisper-tiny"}
     formData.append('data', JSON.stringify(data));
     onSaveAudio(formData);
   };
 
-  useEffect(() => {
-    handleRecording();
-  }, []);
+  // useEffect(() => {
+  //   handleRecording();
+  // }, []);
 
   useEffect(() => {
     console.log('Loading status updated:', loading);
     loadingRef.current = loading;
   }, [loading]);
+
+  useEffect(() => {
+    console.log('Triggered status updated:', triggered);
+    if (triggered)
+      handleRecording();
+  }, [triggered]);
 
   return (
     <Container maxWidth="sm" sx={{ mt: 5, textAlign: 'center' }}>

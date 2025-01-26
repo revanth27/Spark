@@ -10,18 +10,20 @@ import json
 from huggingface_hub import login
 from flask_cors import CORS
 
-login(token = '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')
-
 app = Flask(__name__)
 CORS(app)
+
+login(token = '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')
 
 BASE_URL = 'http://127.0.0.1:5000/'
 
 @app.route('/ASR', methods=['POST'])
 def asr_model():
     print('Into ASR...')
+    print(request.files['file'])
     params = json.loads(request.form['model_params'])
     transcriber = pipeline(task="automatic-speech-recognition", **params)
+    print(request.form)
     out = transcriber((request.files['file']).read())
     print(out)
     response = make_response(json.dumps(out))
@@ -69,7 +71,7 @@ def predict():
     data = {}
     files = request.files
     models = json.loads(request.form['data'])
-    headers = {'Content-type': request.content_type}
+    headers = {'Content-type': request.content_type, 'Access-Control-Allow-Origin': '*'}
     for model in models:
         try:
             url = BASE_URL + model['name']
